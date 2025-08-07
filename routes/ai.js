@@ -1,6 +1,6 @@
 var express = require('express');
 var router = express.Router();
-const { ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings } = require("@langchain/google-genai");
+const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { StructuredOutputParser } = require('@langchain/core/output_parsers')
 const { z } = require('zod');
 require("dotenv").config();
@@ -16,6 +16,11 @@ const parser = StructuredOutputParser.fromZodSchema(
     z.object({
         name: z.string(),
         email: z.string().email(),
+        phone: z.string().optional(),
+        current_job_title: z.string().optional(),
+        current_company: z.string().optional(),
+        summary: z.string().optional(),
+        portfolio_url: z.string().optional(),
         experience: z.array(
             z.object({
                 title: z.string(),
@@ -28,21 +33,22 @@ const parser = StructuredOutputParser.fromZodSchema(
         ).optional(),
         education: z.array(
             z.object({
+                institute_name: z.string(),
+                start_date: z.string().optional(),
+                end_date: z.string().optional(),
                 degree: z.string(),
-                field: z.string().optional(),
-                university: z.string(),
+                field_of_study: z.string().optional(),
                 location: z.string().optional(),
-                startDate: z.string().optional(),
-                endDate: z.string().optional()
+                is_ongoing: z.string().optional()
             })
-        ),
-        skills: z.array(z.string()),
+        ).default([]),
+        skills: z.array(z.string()).default([]),
         projects: z.array(
             z.object({
                 name: z.string(),
                 description: z.string(),
                 techStack: z.array(z.string()).optional(),
-                link: z.string().url().optional()
+                link: z.string().url().optional().or(z.literal(""))
             })
         ).optional(),
     })
@@ -51,7 +57,7 @@ const parser = StructuredOutputParser.fromZodSchema(
 const formatInstructions = parser.getFormatInstructions();
 
 
-router.post('/v1/parseresume', async function (req, res, next) {
+router.post('/v1/parseresume', async function (req, res) {
     const rawPDF = req.body.rawpdf;
 
     const prompt = `
