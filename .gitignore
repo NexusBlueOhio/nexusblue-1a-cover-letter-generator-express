@@ -91,3 +91,7 @@ _site
 
 # Sibling project build output
 build
+
+.env.development
+
+.idea
