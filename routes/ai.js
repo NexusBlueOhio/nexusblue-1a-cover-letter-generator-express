@@ -72,4 +72,50 @@ router.post('/v1/parseresume', async function (req, res) {
     res.send(result);
 });
 
+//pdf upload
+const fs = require('fs');
+const { google } = require('googleapis');
+
+const apikeys = require('./nexusblue-resume-app-d86f35e79ad7.json')
+
+const SCOPE = ["https://www.googleapis.com/auth/drive"]
+
+async function authorize() {
+    const jwtClient = new google.auth.JWT(
+        apikeys.client_email,
+        null,
+        apikeys.private_key,
+        SCOPE
+    )
+    await jwtClient.authorize();
+
+    return jwtClient;
+}
+
+async function uploadFile(authClient) {
+    return new Promise((resolve, rejected) => {
+        const drive = google.drive({ version: 'v3', auth: authClient });
+        var fileMetaData = {
+            name: "",
+            parents: ["1fqSSDHJ_LooROdZ9FBoxneJvAiK0W_fo"]
+        }
+
+        drive.files.create({
+            resource: fileMetaData,
+            media: {
+                body: fs.createReadStream("/home/v/Desktop/01 Projects/Resume/docx/vinit-jain-resume.pdf"),
+                mimeType: 'application/pdf'
+            },
+            fields: 'id'
+        }, (err, file) => {
+            if (err) {
+                return rejected(err)
+            };
+            resolve(file);
+        });
+    })
+}
+
+
+
 module.exports = router;
