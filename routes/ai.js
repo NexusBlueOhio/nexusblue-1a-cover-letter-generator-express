@@ -5,6 +5,14 @@ const { StructuredOutputParser } = require('@langchain/core/output_parsers')
 const { z } = require('zod');
 require("dotenv").config();
 
+const fs = require('fs');
+const { google } = require('googleapis');
+const apikeys = require('../nexusblue-resume-app-d86f35e79ad7.json')
+const SCOPE = ["https://www.googleapis.com/auth/drive"]
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
+
+
 const llm = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
     apiKey: process.env.GOOGLE_API_KEY,
@@ -73,20 +81,13 @@ router.post('/v1/parseresume', async function (req, res) {
 });
 
 //pdf upload
-const fs = require('fs');
-const { google } = require('googleapis');
-
-const apikeys = require('./nexusblue-resume-app-d86f35e79ad7.json')
-
-const SCOPE = ["https://www.googleapis.com/auth/drive"]
-
 async function authorize() {
-    const jwtClient = new google.auth.JWT(
-        apikeys.client_email,
-        null,
-        apikeys.private_key,
-        SCOPE
-    )
+    const jwtClient = new google.auth.JWT({
+        email: apikeys.client_email,
+        keyFile: null,
+        key: apikeys.private_key,
+        scopes: SCOPE
+    });
     await jwtClient.authorize();
 
     return jwtClient;
@@ -111,10 +112,40 @@ async function uploadFile(authClient) {
             if (err) {
                 return rejected(err)
             };
+
             resolve(file);
         });
     })
 }
+
+router.post('/upload-pdf', upload.single('pdf'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // Authorize service account
+        const authClient = await authorize();
+
+        // Upload file to Google Drive
+        const fileData = await uploadFile(
+            authClient,
+            req.file.path,
+            req.file.originalname
+        );
+
+        // Remove the temporary file
+        fs.unlinkSync(req.file.path);
+
+        res.json({
+            message: 'File uploaded successfully',
+            fileId: fileData.id
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to upload file' });
+    }
+});
 
 
 
