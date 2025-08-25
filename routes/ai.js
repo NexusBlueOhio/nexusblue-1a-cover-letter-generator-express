@@ -5,6 +5,7 @@ const { StructuredOutputParser } = require('@langchain/core/output_parsers')
 const { Storage } = require('@google-cloud/storage');
 const { z } = require('zod');
 const multer = require("multer");
+const crypto = require("crypto");
 require("dotenv").config();
 
 const llm = new ChatGoogleGenerativeAI({
@@ -100,10 +101,23 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
 
     // Use original filename or generate a unique one
-    const destFileName = req.file.originalname;
+    const hash = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+    const destFileName = `${hash}.pdf`;
 
     // Create a file object in the bucket
     const file = bucket.file(destFileName);
+
+    // Check if it already exists
+    const [exists] = await file.exists();
+    if (exists) {
+      console.log(`File with hash ${hash} already exists in ${bucketName}`);
+      return res.json({
+        message: "File already exists, skipping upload",
+        fileName: destFileName,
+        bucket: bucketName,
+        hash,
+      });
+    }
 
     // Upload the buffer directly
     await file.save(req.file.buffer, {
