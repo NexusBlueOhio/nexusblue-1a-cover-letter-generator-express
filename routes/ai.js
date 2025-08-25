@@ -1,10 +1,11 @@
-var express = require('express');
-var router = express.Router();
+const express = require('express');
+const router = express.Router();
 const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { StructuredOutputParser } = require('@langchain/core/output_parsers')
+const { Storage } = require('@google-cloud/storage');
 const { z } = require('zod');
+const multer = require("multer");
 require("dotenv").config();
-
 
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash",
@@ -73,7 +74,57 @@ router.post('/v1/parseresume', async function (req, res) {
   res.send(result);
 });
 
+// TODO: move it to a different file with a different url prefix
 //pdf upload
+
+// setting up multer storage
+const storageMulter = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype !== "application/pdf") {
+      return cb(new Error("Only PDF files are allowed!"), false);
+    }
+    cb(null, true);
+  },
+});
+
+// basic configs
+const bucketName = "resume_collection";
+const storage = new Storage();
+const bucket = storage.bucket(bucketName);
+
+// service
+router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
+  try {
+    if (!req.file)
+      return res.status(400).json({ error: "No file uploaded" });
+
+    // Use original filename or generate a unique one
+    const destFileName = req.file.originalname;
+
+    // Create a file object in the bucket
+    const file = bucket.file(destFileName);
+
+    // Upload the buffer directly
+    await file.save(req.file.buffer, {
+      contentType: req.file.mimetype,
+      resumable: false,
+      metadata: {
+        cacheControl: "no-cache",
+      },
+    });
+
+    console.log(`Uploaded ${destFileName} to ${bucketName}`);
+    res.json({
+      message: "File uploaded successfully",
+      fileName: destFileName,
+      bucket: bucketName,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Upload failed" });
+  }
+});
 
 
 module.exports = router;

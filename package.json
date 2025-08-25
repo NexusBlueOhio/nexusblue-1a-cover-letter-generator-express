@@ -6,6 +6,7 @@
     "start": "node ./bin/www"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.17.0",
     "@langchain/core": "^0.3.66",
     "@langchain/google-genai": "^0.2.16",
     "cookie-parser": "~1.4.4",
