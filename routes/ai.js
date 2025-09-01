@@ -16,45 +16,46 @@ const llm = new ChatGoogleGenerativeAI({
   maxRetries: 2,
 });
 
+const nullishString = z.string().nullish();
 const parser = StructuredOutputParser.fromZodSchema(
   z.object({
     name: z.string(),
     email: z.string().email(),
-    phone: z.string().optional(),
-    current_job_title: z.string().optional(),
-    current_company: z.string().optional(),
-    summary: z.string().optional(),
-    portfolio_url: z.string().optional(),
+    phone: nullishString,
+    current_job_title: nullishString,
+    current_company: nullishString,
+    summary: nullishString,
+    portfolio_url: nullishString,
     experience: z.array(
       z.object({
-        title: z.string(),
-        company: z.string(),
-        location: z.string().optional(),
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-        description: z.string().optional()
+        title: nullishString,
+        company: nullishString,
+        location: nullishString,
+        startDate: nullishString,
+        endDate: nullishString,
+        description: nullishString
       })
-    ).optional(),
+    ).nullish(),
     education: z.array(
       z.object({
-        institute_name: z.string(),
-        start_date: z.string().optional(),
-        end_date: z.string().optional(),
-        degree: z.string(),
-        field_of_study: z.string().optional(),
-        location: z.string().optional(),
-        is_ongoing: z.string().optional()
+        institute_name: nullishString,
+        degree: nullishString,
+        start_date: nullishString,
+        end_date: nullishString,
+        field_of_study: nullishString,
+        location: nullishString,
+        is_ongoing: z.union([z.string(), z.boolean()]).nullish()
       })
-    ).default([]),
-    skills: z.array(z.string()).default([]),
+    ).nullish(),
+    skills: z.array(z.string()).nullable(),
     projects: z.array(
       z.object({
-        name: z.string(),
-        description: z.string(),
-        techStack: z.array(z.string()).optional(),
-        link: z.string().url().optional().or(z.literal(""))
+        name: nullishString,
+        description: nullishString,
+        techStack: z.array(z.string()).nullable(),
+        link: z.union([z.string().url(), z.literal("")]).nullish()
       })
-    ).optional(),
+    ).nullish(),
   })
 );
 
@@ -74,7 +75,7 @@ async function parseResume(rawPDF) {
 
 router.post('/v1/parseresume', async function (req, res) {
   const rawPDF = req.body.rawpdf;
-  const result = parseResume(rawPDF)
+  const result = await parseResume(rawPDF)
   res.send(result);
 });
 
@@ -93,7 +94,9 @@ const storageMulter = multer({
 });
 
 // basic configs
+// const bucketName = "nexusblue_resumes";
 const bucketName = "resume_collection";
+
 const storage = new Storage();
 const bucket = storage.bucket(bucketName);
 
@@ -106,9 +109,11 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
     // Use original filename or generate a unique one
     const hash = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
     const destFileName = `${hash}.pdf`;
+    const destTxtName = `parsed/${hash}.txt`;
 
     // Create a file object in the bucket
     const file = bucket.file(destFileName);
+    const txtFile = bucket.file(destTxtName);
 
     // Check if it already exists
     const [exists] = await file.exists();
@@ -130,7 +135,7 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
     // Parse resume
     const resumeDetails = await parseResume(pdfText)
 
-    // TODO save the txt file
+    // TODO save the txt file as well
 
     // Upload the buffer directly
     await file.save(req.file.buffer, {
