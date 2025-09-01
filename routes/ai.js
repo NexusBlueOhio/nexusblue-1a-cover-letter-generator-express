@@ -111,7 +111,8 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
     const [exists] = await file.exists();
     if (exists) {
       console.log(`File with hash ${hash} already exists in ${bucketName}`);
-      return res.json({
+      return res.status(200).json({
+        uploaded: false,
         message: "File already exists, skipping upload",
         fileName: destFileName,
         bucket: bucketName,
@@ -131,6 +132,7 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
     console.log(`Uploaded ${destFileName} to ${bucketName}`);
     res.json({
       message: "File uploaded successfully",
+      uploaded: true,
       fileName: destFileName,
       bucket: bucketName,
     });
