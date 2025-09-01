@@ -94,10 +94,18 @@ const storageMulter = multer({
 });
 
 // basic configs
-// const bucketName = "nexusblue_resumes";
-const bucketName = "resume_collection";
+const bucketName = "nexusblue_resumes";
+// const bucketName = "resume_collection";
 
-const storage = new Storage();
+const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+
+const storage = new Storage({
+  projectId: sa.project_id,
+  credentials: {
+    client_email: sa.client_email,
+    private_key: sa.private_key,
+  },
+});
 const bucket = storage.bucket(bucketName);
 
 // service
