@@ -6,6 +6,7 @@ const { Storage } = require('@google-cloud/storage');
 const { z } = require('zod');
 const multer = require("multer");
 const crypto = require("crypto");
+const pdfParse = require("pdf-parse")
 require("dotenv").config();
 
 const llm = new ChatGoogleGenerativeAI({
@@ -59,19 +60,21 @@ const parser = StructuredOutputParser.fromZodSchema(
 
 const formatInstructions = parser.getFormatInstructions();
 
+async function parseResume(rawPDF) {
+  const prompt = `
+      Extract the following information from the resume text.
+      ${formatInstructions}
+
+      Raw PDF Resume extract:
+      ${rawPDF}`;
+  const response = await llm.invoke(prompt);
+  const result = await parser.parse(response.content);
+  return result;
+}
 
 router.post('/v1/parseresume', async function (req, res) {
   const rawPDF = req.body.rawpdf;
-
-  const prompt = `
-    Extract the following information from the resume text.
-    ${formatInstructions}
-
-    Raw PDF Resume extract:
-    ${rawPDF}`;
-
-  const response = await llm.invoke(prompt);
-  const result = await parser.parse(response.content);
+  const result = parseResume(rawPDF)
   res.send(result);
 });
 
@@ -119,6 +122,15 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
         hash,
       });
     }
+
+    // Extract text from PDF buffer
+    const pdfData = await pdfParse(req.file.buffer);
+    const pdfText = pdfData.text;
+
+    // Parse resume
+    const resumeDetails = await parseResume(pdfText)
+
+    // TODO save the txt file
 
     // Upload the buffer directly
     await file.save(req.file.buffer, {
