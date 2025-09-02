@@ -163,7 +163,7 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Upload failed" });
+    res.status(500).json({ error: "Upload failed. Please check your pdf format." });
   }
 });
 
