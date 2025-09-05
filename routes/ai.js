@@ -59,6 +59,18 @@ const parser = StructuredOutputParser.fromZodSchema(
   })
 );
 
+function sanitizeForFileName(name, fallback) {
+  if (!name || typeof name !== 'string') return fallback;
+  let s = name.normalize('NFKD')
+    .replace(/[^\w.\- ]+/g, '')   // drop unsafe
+    .replace(/\s+/g, '_')         // spaces -> underscores
+    .replace(/^_+|_+$/g, '')      // trim underscores
+    .toLowerCase();
+  if (s.length === 0) s = fallback;
+  if (s.length > 80) s = s.slice(0, 80);
+  return s;
+}
+
 const formatInstructions = parser.getFormatInstructions();
 
 async function parseResume(rawPDF) {
@@ -95,7 +107,6 @@ const storageMulter = multer({
 
 // basic configs
 const bucketName = "nexusblue_resumes";
-// const bucketName = "resume_collection";
 
 const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
@@ -117,11 +128,9 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
     // Use original filename or generate a unique one
     const hash = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
     const destFileName = `${hash}.pdf`;
-    const destTxtName = `parsed/${hash}.txt`;
 
     // Create a file object in the bucket
     const file = bucket.file(destFileName);
-    const txtFile = bucket.file(destTxtName);
 
     // Check if it already exists
     const [exists] = await file.exists();
@@ -142,8 +151,19 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
 
     // Parse resume
     const resumeDetails = await parseResume(pdfText)
+    const resumeDetailsText = JSON.stringify(resumeDetails, null, 2);
 
-    // TODO save the txt file as well
+    // generate file name for the user
+    const candidate = sanitizeForFileName(resumeDetails?.name, 'unknown');
+    const destTxtName = `parsed/${candidate}-${hash.slice(0, 8)}.txt`;
+    const txtFile = bucket.file(destTxtName);
+
+    // save the txt file as well
+    await txtFile.save(Buffer.from(resumeDetailsText, 'utf-8'), {
+      contentType: "text/plain; charset=utf-8",
+      resumable: false,
+      metadata: { cacheControl: "no-cache" },
+    });
 
     // Upload the buffer directly
     await file.save(req.file.buffer, {
@@ -160,6 +180,7 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
       uploaded: true,
       fileName: destFileName,
       bucket: bucketName,
+      txtFileName: destTxtName,
     });
   } catch (err) {
     console.error(err);
