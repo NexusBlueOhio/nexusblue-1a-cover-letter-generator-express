@@ -7,6 +7,7 @@ const { z } = require('zod');
 const multer = require("multer");
 const crypto = require("crypto");
 const pdfParse = require("pdf-parse")
+const YAML = require('yaml');
 require("dotenv").config();
 
 const llm = new ChatGoogleGenerativeAI({
@@ -151,7 +152,7 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
 
     // Parse resume
     const resumeDetails = await parseResume(pdfText)
-    const resumeDetailsText = JSON.stringify(resumeDetails, null, 2);
+    const resumeDetailsText = YAML.stringify(resumeDetails, null, 2);
 
     // generate file name for the user
     const candidate = sanitizeForFileName(resumeDetails?.name, 'unknown');
@@ -160,7 +161,7 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
 
     // save the txt file as well
     await txtFile.save(Buffer.from(resumeDetailsText, 'utf-8'), {
-      contentType: "text/plain; charset=utf-8",
+      contentType: "text/yaml; charset=utf-8",
       resumable: false,
       metadata: { cacheControl: "no-cache" },
     });
