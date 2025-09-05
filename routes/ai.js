@@ -86,16 +86,15 @@ async function parseResume(rawPDF) {
   return result;
 }
 
-router.post('/v1/parseresume', async function (req, res) {
-  const rawPDF = req.body.rawpdf;
-  const result = await parseResume(rawPDF)
-  res.send(result);
-});
+// router.post('/v1/parseresume', async function (req, res) {
+//   const rawPDF = req.body.rawpdf;
+//   const result = await parseResume(rawPDF)
+//   res.send(result);
+// });
 
 // TODO: move it to a different file with a different url prefix
-//pdf upload
 
-// setting up multer storage
+// basic configs
 const storageMulter = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
@@ -105,8 +104,6 @@ const storageMulter = multer({
     cb(null, true);
   },
 });
-
-// basic configs
 const bucketName = "nexusblue_resumes";
 
 const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
