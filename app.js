@@ -39,7 +39,7 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
-app.use('/ai', aiRouter)
-app.use("/candidates", candidatesRouter)
+app.use('/ai', aiRouter);
+app.use("/candidates", candidatesRouter);
 
 module.exports = app;

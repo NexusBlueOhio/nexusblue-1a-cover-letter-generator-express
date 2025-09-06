@@ -89,6 +89,28 @@ function fileRef({ bucketName, destFileName }) {
     return getBucket(bucketName).file(destFileName);
 }
 
+/**
+ * Lists files in a bucket, optionally filtering by prefix.
+ */
+async function listFiles({ bucketName, prefix }) {
+    const options = {};
+    if (prefix) {
+        options.prefix = prefix;
+    }
+
+    const [files] = await getBucket(bucketName).getFiles(options);
+    return files;
+}
+
+/**
+ * Get file content as a string.
+ */
+async function getFileContent({ bucketName, fileName }) {
+    const file = getBucket(bucketName).file(fileName);
+    const [content] = await file.download();
+    return content.toString('utf-8');
+}
+
 module.exports = {
     storage,
     getBucket,
@@ -96,4 +118,6 @@ module.exports = {
     uploadBuffer,
     saveText,
     fileRef,
+    listFiles,
+    getFileContent,
 };
