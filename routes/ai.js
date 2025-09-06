@@ -85,13 +85,6 @@ async function parseResume(rawPDF) {
   const result = await parser.parse(response.content);
   return result;
 }
-
-// router.post('/v1/parseresume', async function (req, res) {
-//   const rawPDF = req.body.rawpdf;
-//   const result = await parseResume(rawPDF)
-//   res.send(result);
-// });
-
 // TODO: move it to a different file with a different url prefix
 
 // basic configs
