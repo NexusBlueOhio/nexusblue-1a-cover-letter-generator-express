@@ -8,7 +8,6 @@ const multer = require("multer");
 const crypto = require("crypto");
 const pdfParse = require("pdf-parse")
 const YAML = require('yaml');
-require("dotenv").config();
 
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash",
