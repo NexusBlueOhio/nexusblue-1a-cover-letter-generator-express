@@ -1,13 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
-const { StructuredOutputParser } = require('@langchain/core/output_parsers')
-const { Storage } = require('@google-cloud/storage');
+const { StructuredOutputParser } = require('@langchain/core/output_parsers');
 const { z } = require('zod');
 const multer = require("multer");
 const crypto = require("crypto");
-const pdfParse = require("pdf-parse")
+const pdfParse = require("pdf-parse");
 const YAML = require('yaml');
+
+// import your GCS helpers
+const { fileExists, uploadBuffer, saveText } = require('../services/gcs');
+
+// Prefer env bucket (fallback to your current default)
+const BUCKET_NAME = process.env.GCS_BUCKET || "nexusblue_resumes";
 
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash",
@@ -62,9 +67,9 @@ const parser = StructuredOutputParser.fromZodSchema(
 function sanitizeForFileName(name, fallback) {
   if (!name || typeof name !== 'string') return fallback;
   let s = name.normalize('NFKD')
-    .replace(/[^\w.\- ]+/g, '')   // drop unsafe
-    .replace(/\s+/g, '_')         // spaces -> underscores
-    .replace(/^_+|_+$/g, '')      // trim underscores
+    .replace(/[^\w.\- ]+/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/^_+|_+$/g, '')
     .toLowerCase();
   if (s.length === 0) s = fallback;
   if (s.length > 80) s = s.slice(0, 80);
@@ -84,9 +89,8 @@ async function parseResume(rawPDF) {
   const result = await parser.parse(response.content);
   return result;
 }
-// TODO: move it to a different file with a different url prefix
 
-// basic configs
+// ---- Multer config ----
 const storageMulter = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
@@ -96,80 +100,62 @@ const storageMulter = multer({
     cb(null, true);
   },
 });
-const bucketName = "nexusblue_resumes";
 
-const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-
-const storage = new Storage({
-  projectId: sa.project_id,
-  credentials: {
-    client_email: sa.client_email,
-    private_key: sa.private_key,
-  },
-});
-const bucket = storage.bucket(bucketName);
-
-// service
+// ---- Route ----
 router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
   try {
-    if (!req.file)
-      return res.status(400).json({ error: "No file uploaded" });
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    // Use original filename or generate a unique one
     const hash = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
     const destFileName = `${hash}.pdf`;
 
-    // Create a file object in the bucket
-    const file = bucket.file(destFileName);
-
-    // Check if it already exists
-    const [exists] = await file.exists();
+    // ✅ Use helper to check existence
+    const exists = await fileExists({ bucketName: BUCKET_NAME, destFileName });
     if (exists) {
-      console.log(`File with hash ${hash} already exists in ${bucketName}`);
+      console.log(`File with hash ${hash} already exists in ${BUCKET_NAME}`);
       return res.status(200).json({
         uploaded: false,
         message: "File already exists, skipping upload",
         fileName: destFileName,
-        bucket: bucketName,
+        bucket: BUCKET_NAME,
         hash,
       });
     }
 
-    // Extract text from PDF buffer
+    // Extract text and parse with LLM
     const pdfData = await pdfParse(req.file.buffer);
     const pdfText = pdfData.text;
 
-    // Parse resume
-    const resumeDetails = await parseResume(pdfText)
-    const resumeDetailsText = YAML.stringify(resumeDetails, null, 2);
+    const resumeDetails = await parseResume(pdfText);
+    const resumeDetailsText = JSON.stringify(resumeDetails, null, 2);
 
-    // generate file name for the user
     const candidate = sanitizeForFileName(resumeDetails?.name, 'unknown');
     const destTxtName = `parsed/${candidate}-${hash.slice(0, 8)}.txt`;
-    const txtFile = bucket.file(destTxtName);
 
-    // save the txt file as well
-    await txtFile.save(Buffer.from(resumeDetailsText, 'utf-8'), {
+    // ✅ Save the parsed YAML/TXT
+    await saveText({
+      bucketName: BUCKET_NAME,
+      destFileName: destTxtName,
+      text: resumeDetailsText,
       contentType: "text/yaml; charset=utf-8",
-      resumable: false,
       metadata: { cacheControl: "no-cache" },
     });
 
-    // Upload the buffer directly
-    await file.save(req.file.buffer, {
+    // ✅ Upload the original PDF
+    await uploadBuffer({
+      bucketName: BUCKET_NAME,
+      destFileName,
+      buffer: req.file.buffer,
       contentType: req.file.mimetype,
-      resumable: false,
-      metadata: {
-        cacheControl: "no-cache",
-      },
+      metadata: { cacheControl: "no-cache" },
     });
 
-    console.log(`Uploaded ${destFileName} to ${bucketName}`);
+    console.log(`Uploaded ${destFileName} to ${BUCKET_NAME}`);
     res.json({
       message: "File uploaded successfully",
       uploaded: true,
       fileName: destFileName,
-      bucket: bucketName,
+      bucket: BUCKET_NAME,
       txtFileName: destTxtName,
     });
   } catch (err) {
@@ -177,6 +163,5 @@ router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {
     res.status(500).json({ error: "Upload failed. Please check your pdf format." });
   }
 });
-
 
 module.exports = router;
