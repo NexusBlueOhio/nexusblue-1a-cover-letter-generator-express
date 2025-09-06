@@ -8,7 +8,7 @@ const multer = require("multer");
 const crypto = require("crypto");
 const pdfParse = require("pdf-parse")
 const YAML = require('yaml');
-require("dotenv").config();
+const db = require('../db/db')
 
 const llm = new ChatGoogleGenerativeAI({
   model: "gemini-2.5-flash",
@@ -109,6 +109,11 @@ const storage = new Storage({
   },
 });
 const bucket = storage.bucket(bucketName);
+
+router.get("/testdb", async (req, res) => {
+  const response = await db.checkConnection();
+  res.send(response);
+});
 
 // service
 router.post("/v1/uploadpdf", storageMulter.single("file"), async (req, res) => {

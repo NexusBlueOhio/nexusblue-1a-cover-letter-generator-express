@@ -9,6 +9,7 @@
     "@google-cloud/storage": "^7.17.0",
     "@langchain/core": "^0.3.66",
     "@langchain/google-genai": "^0.2.16",
+    "@supabase/supabase-js": "^2.57.2",
     "cookie-parser": "~1.4.4",
     "cors": "^2.8.5",
     "debug": "~2.6.9",
